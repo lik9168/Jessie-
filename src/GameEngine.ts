@@ -55,15 +55,50 @@ export class GameEngine {
   onGameOver?: () => void;
   onLevelUp?: (level: number) => void;
 
+  private images: Record<string, HTMLImageElement> = {};
+  private imagesLoaded = false;
+
   constructor(canvas: HTMLCanvasElement) {
     this.canvas = canvas;
     this.ctx = canvas.getContext('2d')!;
     this.initStars();
     this.initClouds();
     this.resetPlayer();
+    this.loadAssets();
     
     window.addEventListener('keydown', (e) => this.keys[e.code] = true);
     window.addEventListener('keyup', (e) => this.keys[e.code] = false);
+  }
+
+  private loadAssets() {
+    const assets = {
+      player: '/assets/player.png',
+      enemy_basic: '/assets/enemy_basic.png',
+      enemy_fast: '/assets/enemy_fast.png',
+      enemy_heavy: '/assets/enemy_heavy.png',
+    };
+
+    let loadedCount = 0;
+    const totalAssets = Object.keys(assets).length;
+
+    Object.entries(assets).forEach(([key, src]) => {
+      const img = new Image();
+      img.src = src;
+      img.onload = () => {
+        loadedCount++;
+        if (loadedCount === totalAssets) {
+          this.imagesLoaded = true;
+        }
+      };
+      img.onerror = () => {
+        console.warn(`Failed to load asset: ${src}, falling back to vector shapes.`);
+        loadedCount++; // Still count it to mark loading as "finished"
+        if (loadedCount === totalAssets) {
+          this.imagesLoaded = true;
+        }
+      };
+      this.images[key] = img;
+    });
   }
 
   private initStars() {
@@ -540,17 +575,25 @@ export class GameEngine {
 
     // Draw Enemies
     this.enemies.forEach(enemy => {
-      this.ctx.fillStyle = enemy.color;
-      this.ctx.shadowBlur = 15;
-      this.ctx.shadowColor = enemy.color;
-      
-      // Draw ship body
-      this.ctx.beginPath();
-      this.ctx.moveTo(enemy.x + enemy.width / 2, enemy.y + enemy.height);
-      this.ctx.lineTo(enemy.x + enemy.width, enemy.y);
-      this.ctx.lineTo(enemy.x, enemy.y);
-      this.ctx.closePath();
-      this.ctx.fill();
+      const imgKey = `enemy_${enemy.type.toLowerCase()}`;
+      const img = this.images[imgKey];
+
+      if (this.imagesLoaded && img && img.complete && img.naturalWidth !== 0) {
+        this.ctx.drawImage(img, enemy.x, enemy.y, enemy.width, enemy.height);
+      } else {
+        this.ctx.fillStyle = enemy.color;
+        this.ctx.shadowBlur = 15;
+        this.ctx.shadowColor = enemy.color;
+        
+        // Draw ship body
+        this.ctx.beginPath();
+        this.ctx.moveTo(enemy.x + enemy.width / 2, enemy.y + enemy.height);
+        this.ctx.lineTo(enemy.x + enemy.width, enemy.y);
+        this.ctx.lineTo(enemy.x, enemy.y);
+        this.ctx.closePath();
+        this.ctx.fill();
+        this.ctx.shadowBlur = 0;
+      }
 
       // Health bar
       if (enemy.maxHealth > 1) {
@@ -561,34 +604,37 @@ export class GameEngine {
         this.ctx.fillStyle = enemy.color;
         this.ctx.fillRect(enemy.x, enemy.y - 10, barWidth * healthPercent, 4);
       }
-      
-      this.ctx.shadowBlur = 0;
     });
 
     // Draw Player
     if (!this.player.invulnerable || Math.floor(Date.now() / 100) % 2 === 0) {
-      this.ctx.fillStyle = '#ffffff';
-      this.ctx.strokeStyle = '#0f172a'; // Slate 900 for outline
-      this.ctx.lineWidth = 2;
-      this.ctx.shadowBlur = 15;
-      this.ctx.shadowColor = '#60a5fa';
-      
-      // Ship body
-      this.ctx.beginPath();
-      this.ctx.moveTo(this.player.x + this.player.width / 2, this.player.y);
-      this.ctx.lineTo(this.player.x + this.player.width, this.player.y + this.player.height);
-      this.ctx.lineTo(this.player.x + this.player.width / 2, this.player.y + this.player.height * 0.8);
-      this.ctx.lineTo(this.player.x, this.player.y + this.player.height);
-      this.ctx.closePath();
-      this.ctx.fill();
-      this.ctx.stroke(); // Add outline
+      const img = this.images['player'];
+      if (this.imagesLoaded && img && img.complete && img.naturalWidth !== 0) {
+        this.ctx.drawImage(img, this.player.x, this.player.y, this.player.width, this.player.height);
+      } else {
+        this.ctx.fillStyle = '#ffffff';
+        this.ctx.strokeStyle = '#0f172a'; // Slate 900 for outline
+        this.ctx.lineWidth = 2;
+        this.ctx.shadowBlur = 15;
+        this.ctx.shadowColor = '#60a5fa';
+        
+        // Ship body
+        this.ctx.beginPath();
+        this.ctx.moveTo(this.player.x + this.player.width / 2, this.player.y);
+        this.ctx.lineTo(this.player.x + this.player.width, this.player.y + this.player.height);
+        this.ctx.lineTo(this.player.x + this.player.width / 2, this.player.y + this.player.height * 0.8);
+        this.ctx.lineTo(this.player.x, this.player.y + this.player.height);
+        this.ctx.closePath();
+        this.ctx.fill();
+        this.ctx.stroke(); // Add outline
 
-      // Engine glow
-      this.ctx.fillStyle = '#3b82f6';
-      this.ctx.beginPath();
-      this.ctx.arc(this.player.x + this.player.width / 2, this.player.y + this.player.height, 5 + Math.random() * 5, 0, Math.PI * 2);
-      this.ctx.fill();
-      this.ctx.stroke(); // Outline engine too
+        // Engine glow
+        this.ctx.fillStyle = '#3b82f6';
+        this.ctx.beginPath();
+        this.ctx.arc(this.player.x + this.player.width / 2, this.player.y + this.player.height, 5 + Math.random() * 5, 0, Math.PI * 2);
+        this.ctx.fill();
+        this.ctx.stroke(); // Outline engine too
+      }
 
       // Shield
       if (this.stats.shieldActive) {
